@@ -73,7 +73,7 @@ function applyTransforms(path, root) {
   // turn all arc commands into splines so we can transform them even with skews
   path.setAttribute('d', path2curve(path));
 
-  var svg    = path.ownerDocument.documentElement
+  var svg    = path.ownerSVGElement
     , normal = (root||svg).getCTM().inverse() // compensation for root's scaling
     , matrix = normal.multiply(path.getCTM()) // transform, relative to svg root
 
@@ -144,7 +144,7 @@ var lexSVGPath = (function() {
 function pathify(elem, root) {
   var node   = 'nodeType' in elem ? elem : elem[0]
     , doc    = node.ownerDocument
-    , svg    = doc.documentElement
+    , svg    = node.ownerSVGElement
     , svg_ns = svg.getAttribute('xmlns')
     , normal = (root||svg).getCTM().inverse() // compensation for root's scaling
     , matrix = normal.multiply(node.getCTM()) // transform, relative to svg root
