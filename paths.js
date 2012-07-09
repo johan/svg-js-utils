@@ -53,19 +53,25 @@ function absolutizePath(path) {
   }
 }
 
+Array.prototype.flatten || (Array.prototype.flatten = function() {
+  return this.reduce(function(a, b) {
+    return a.concat('function' === typeof b.flatten ? b.flatten() : b);
+  }, []);
+});
+
+// Uses Raphael.path2curve and Raphael.pathToRelative from
+// from https://raw.github.com/DmitryBaranovskiy/raphael/master/raphael-min.js:
+//
 // Calculates a new <path d> attribute relative to a given root (<svg>) element,
 // folding in all the transforms into the path data itself so it can move there,
 // and get rid of its transform attribute.
-// NOTE: This doesn't yet work for the elliptical arc commands, as those require
-//       translation to béziers first, in the generic case; non-uniform scaling
-//       of an arc command can not always be represented by a mere arc command.
-// TODO: Translate arc commands to their bézier approximations first -- see:
-// http://stackoverflow.com/questions/734076/geometrical-arc-to-bezier-curve
 function applyTransforms(path, root) {
   function point(x, y) { var p = svg.createSVGPoint(); p.x=x; p.y=y; return p; }
 
   // add a copy of the path at the same level of the hierarchy to see transforms
   path = path.parentElement.appendChild(path.cloneNode(false));
+  // turn all arc commands into splines so we can transform them even with skews
+  path.setAttribute('d', path2curve(path));
 
   var svg    = path.ownerDocument.documentElement
     , normal = (root||svg).getCTM().inverse() // compensation for root's scaling
@@ -88,8 +94,6 @@ function applyTransforms(path, root) {
   while (++i < len) {
     seg = segs.getItem(i);
     cmd = seg.pathSegTypeAsLetter;
-
-    // TODO: if ('A' === cmd) convertArcToBéziers here
 
     // Apply the transform to all coordinates and handles
     coords.forEach(function(sfx) {
@@ -114,7 +118,9 @@ function applyTransforms(path, root) {
 
   // remove our work copy; it's served us well
   path.parentElement.removeChild(path);
-  return path.getAttribute('d');
+
+  // for niceness, compress it a bit by making it relative
+  return relatizePath(path);
 }
 
 // split an SVG path into its tokens, with no loss of precision due to parsing
@@ -256,6 +262,23 @@ function pathify(elem, root) {
                      );
   }
 }
+
+// Turns a path commands into relative coordinates. Uses Raphael.pathToRelative:
+// https://raw.github.com/DmitryBaranovskiy/raphael/master/raphael-min.js:
+function relatizePath(path) {
+  if ('string' !== typeof path && 'function' === typeof path.getAttribute)
+    path = path.getAttribute('d');
+  return Raphael.pathToRelative(path).flatten().join(' ');
+}
+
+// Changes all path arc commands to béziers. Uses Raphael.path2curve:
+// https://raw.github.com/DmitryBaranovskiy/raphael/master/raphael-min.js:
+function path2curve(path) {
+  if ('string' !== typeof path && 'function' === typeof path.getAttribute)
+    path = path.getAttribute('d');
+  return Raphael.path2curve(path).flatten().join(' ');
+}
+
 
 // Copies all presentational-only attributes of element `src` to `dst`.
 // NOTE: when using stylesheets with node or id selectors, those styles are lost
