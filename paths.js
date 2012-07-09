@@ -74,7 +74,7 @@ function applyTransforms(path, root) {
   path.setAttribute('d', path2curve(path));
 
   var svg    = path.ownerSVGElement
-    , normal = (root||svg).getCTM().inverse() // compensation for root's scaling
+    , normal = (root||svg).getScreenCTM().inverse() // root scaling compensation
     , matrix = normal.multiply(path.getCTM()) // transform, relative to svg root
 
     , _      = ''
@@ -146,7 +146,7 @@ function pathify(elem, root) {
     , doc    = node.ownerDocument
     , svg    = node.ownerSVGElement
     , svg_ns = svg.getAttribute('xmlns')
-    , normal = (root||svg).getCTM().inverse() // compensation for root's scaling
+    , normal = (root||svg).getScreenCTM().inverse() // root scaling compensation
     , matrix = normal.multiply(node.getCTM()) // transform, relative to svg root
 
     , output = []
