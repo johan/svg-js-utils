@@ -131,3 +131,197 @@ var lexSVGPath = (function() {
     return d.split(path_re).filter(dropWhitespace);
   };
 })();
+
+// Takes any arbitrary element sub-tree(s) and converts it/them into an array of
+// <path> elements suitable for appending on `root` (the <svg> root, by default)
+// Original implementation by Phrogz -- http://phrogz.net/SVG/transformations.js
+function pathify(elem, root) {
+  var node   = 'nodeType' in elem ? elem : elem[0]
+    , doc    = node.ownerDocument
+    , svg    = doc.documentElement
+    , svg_ns = svg.getAttribute('xmlns')
+    , normal = (root||svg).getCTM().inverse() // compensation for root's scaling
+    , matrix = normal.multiply(node.getCTM()) // transform, relative to svg root
+
+    , output = []
+    , makers = { path: function() {
+                         path.setAttribute('d', elem.getAttribute('d'));
+                       }
+               , line: line
+               , rect: rect
+               , circle: circle
+               , ellipse: ellipse
+               , polygon: polygon
+               , polyline: polygon
+               }
+    , i, len, path, make, transform
+    ;
+
+  if (elem.tagName == 'g' || 'function' === typeof elem.push) {
+    for (i = 0; node = (elem.childNodes || elem)[i]; i++) {
+      if (node.nodeType == 1) {
+        output = output.concat(pathify(node, root));
+      }
+    }
+  }
+  else {
+    path = doc.createElementNS(svg_ns, 'path');
+    make = makers[elem.tagName];
+    if (make) make(); else path = null;
+    if (path) {
+      transform = svg.createSVGTransform();
+      transform.setMatrix(matrix);
+      path.transform.baseVal.initialize(transform);
+
+      // temp: set its reference environment so applyTransforms knows what to do
+      elem.parentNode.appendChild(path);
+      path.setAttribute('d', applyTransforms(path));
+      path.removeAttribute('transform');
+      elem.parentNode.removeChild(path);
+
+      copyPresentation(elem, path);
+      output.push(path);
+    }
+  }
+  return output;
+
+  function line() {
+    var x1 = +elem.getAttribute('x1')
+      , y1 = +elem.getAttribute('y1')
+      , x2 = +elem.getAttribute('x2')
+      , y2 = +elem.getAttribute('y2')
+      ;
+    path.setAttribute('d', 'M'+ x1 +','+ y1 +'L'+ x2 +','+ y2);
+  }
+
+  function rect() {
+    var x  = +elem.getAttribute('x')
+      , y  = +elem.getAttribute('y')
+      , w  = +elem.getAttribute('width')
+      , h  = +elem.getAttribute('height')
+      , rx = Math.min(w/2, +elem.getAttribute('rx') || 0)
+      , ry = Math.min(h/2, +elem.getAttribute('ry') || 0)
+      , r  = rx || ry
+      , arc_to;
+    if (rx && !elem.hasAttribute('ry')) ry = rx;
+    else if (ry && !elem.hasAttribute('rx')) rx = ry;
+    arc_to = 'A'+ rx +','+ ry +',0,0,'+ (rx * ry < 0 ? 0 : 1) +',';
+    path.setAttribute( 'd'
+                     , 'M'+ (x+rx) +','+ y +
+                     + 'H'+ (x+w-rx)
+                          + (r ? arc_to + (x+w) +','+ (y+ry) : '')
+                     + 'V'+ (y+h-ry)
+                          + (r ? arc_to + (x+w-rx) +','+ (y+h) : '')
+                     + 'H'+ (x+rx)
+                          + (r ? arc_to + x +','+ (y+h-ry) : '')
+                     + 'V'+ (y+ry)
+                          + (r ? arc_to + (x+rx) +','+ y : '')
+                     );
+  }
+
+  function circle() {
+    var cx = +elem.getAttribute('cx')
+      , cy = +elem.getAttribute('cy')
+      , r  = +elem.getAttribute('r')
+      , y0 = cy - r, y1 = cy + r
+      ;
+      path.setAttribute( 'd'
+                       , 'M' + cx +','+ y0
+                       + 'A' + [r,r,0,0,0,cx,y1,r,r,0,0,0,cx,y0].join(',')
+                       );
+  }
+
+  function ellipse() {
+    var cx = +elem.getAttribute('cx')
+      , cy = +elem.getAttribute('cy')
+      , rx = +elem.getAttribute('rx')
+      , ry = +elem.getAttribute('ry')
+      , y0 = cy - ry, y1 = cy + ry
+      ;
+    path.setAttribute( 'd'
+                     , 'M' + cx +','+ y0
+                     + 'A' + [rx,ry,0,0,0,cx,y1,rx,ry,0,0,0,cx,y0].join(',')
+                     );
+  }
+
+  function polygon() {
+    for (var i = 0, l = [], pts = elem.points, p; i < pth.numberOfItems; i++) {
+      p = pts.getItem(i);
+      l[i] = p.x+','+p.y;
+    }
+    path.setAttribute( 'd'
+                     , 'M' + l.shift()
+                     + 'L' + l.join(' ')
+                     + (elem.tagName == 'polygon') ? 'Z' : ''
+                     );
+  }
+}
+
+// Copies all presentational-only attributes of element `src` to `dst`.
+// NOTE: when using stylesheets with node or id selectors, those styles are lost
+function copyPresentation(src, dst) {
+  [ 'alignment-baseline'
+  , 'baseline-shift'
+  , 'clip'
+  , 'clip-path'
+  , 'clip-rule'
+  , 'color'
+  , 'color-interpolation'
+  , 'color-interpolation-filters'
+  , 'color-profile'
+  , 'color-rendering'
+  , 'cursor'
+  , 'direction'
+  , 'display'
+  , 'dominant-baseline'
+  , 'enable-background'
+  , 'fill'
+  , 'fill-opacity'
+  , 'fill-rule'
+  , 'filter'
+  , 'flood-color'
+  , 'flood-opacity'
+  , 'font-family'
+  , 'font-size'
+  , 'font-size-adjust'
+  , 'font-stretch'
+  , 'font-style'
+  , 'font-variant'
+  , 'font-weight'
+  , 'glyph-orientation-horizontal'
+  , 'glyph-orientation-vertical'
+  , 'image-rendering'
+  , 'kerning'
+  , 'letter-spacing'
+  , 'lighting-color'
+  , 'marker-end'
+  , 'marker-mid'
+  , 'marker-start'
+  , 'mask'
+  , 'opacity'
+  , 'overflow'
+  , 'pointer-events'
+  , 'shape-rendering'
+  , 'stop-color'
+  , 'stop-opacity'
+  , 'stroke'
+  , 'stroke-dasharray'
+  , 'stroke-dashoffset'
+  , 'stroke-linecap'
+  , 'stroke-linejoin'
+  , 'stroke-miterlimit'
+  , 'stroke-opacity'
+  , 'stroke-width'
+  , 'text-anchor'
+  , 'text-decoration'
+  , 'text-rendering'
+  , 'unicode-bidi'
+  , 'visibility'
+  , 'word-spacing'
+  , 'writing-mode'
+  , 'class'
+  , 'style'
+  ].forEach(function(attr) {
+    if (src.hasAttribute(attr)) dst.setAttribute(attr, src.getAttribute(attr));
+  });
+}
